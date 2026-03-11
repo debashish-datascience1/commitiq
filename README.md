@@ -131,32 +131,38 @@ http://localhost:5000/test-reminder
 ## 💬 Conversation Flow
 
 ```
-┌─────────────────────────────────────────────┐
-│  10:00 AM Daily                             │
-│                                             │
-│  Bot: "👋 Good morning! Do you want to      │
-│        make any commits today? (yes/no)"    │
-└────────────────┬────────────────────────────┘
-                 │
-       ┌─────────┴─────────┐
-      yes                  no
-       │                   │
-       ▼                   ▼
- Fetch GitHub        "✅ Thank you!
- Repositories        Have a great day!"
-       │
-       ▼
- Show numbered repo list
- 1. my-portfolio
- 2. commitiq
- 3. side-project
-       │
-       ▼
- User replies "2"
-       │
-       ▼
- Send repo link 🔗
- (Future: AI actions)
+Bot: "Do you want to commit today?"
+     1 — Yes, let's work!
+     2 — No, not today
+          │
+     ┌────┴────┐
+     1         2
+     │         │
+     ▼         ▼
+ Repo list   "Have a great day!"
+     │
+     ▼
+ User picks repo number
+     │
+     ▼
+ "🔍 Fetching open issues..."
+     │
+     ▼
+ Show issues list
+ 1. #23 — Fix login bug
+ 2. #19 — Update README
+     │
+     ▼
+ User picks issue number
+     │
+     ▼
+ Show issue details + GitHub link
+ (AI fix coming soon!)
+     │
+  reply 0
+     │
+     ▼
+ Back to repo list ↩️
 ```
 
 ---
