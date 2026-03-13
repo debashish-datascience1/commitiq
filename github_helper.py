@@ -7,30 +7,43 @@ load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_USERNAME = os.getenv("GITHUB_USERNAME")
 
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json",
+}
+
 
 def get_user_repos():
-    """Fetch all repos for the configured GitHub user, sorted by last updated."""
+    """Fetch all repos sorted by last updated."""
     url = f"https://api.github.com/users/{GITHUB_USERNAME}/repos"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-    }
     params = {"per_page": 20, "sort": "updated"}
-
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=HEADERS, params=params)
     response.raise_for_status()
-
-    repos = response.json()
-    return [repo["name"] for repo in repos]
+    return [repo["name"] for repo in response.json()]
 
 
 def get_repo_url(repo_name):
     """Get the HTML URL for a specific repo."""
     url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=HEADERS)
     response.raise_for_status()
     return response.json().get("html_url", "")
+
+
+def get_open_issues(repo_name):
+    """Fetch all open issues for a repo (excludes pull requests)."""
+    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"
+    params = {"state": "open", "per_page": 20}
+    response = requests.get(url, headers=HEADERS, params=params)
+    response.raise_for_status()
+
+    issues = []
+    for item in response.json():
+        # GitHub API returns PRs as issues too — filter them out
+        if "pull_request" not in item:
+            issues.append({
+                "number": item["number"],
+                "title": item["title"],
+                "url": item["html_url"],
+            })
+    return issues
