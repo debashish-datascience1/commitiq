@@ -30,6 +30,20 @@ def get_repo_url(repo_name):
     return response.json().get("html_url", "")
 
 
+def get_issue_details(repo_name, issue_number):
+    """Fetch full details (title + body) of a single issue."""
+    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues/{issue_number}"
+    response = requests.get(url, headers=HEADERS)
+    response.raise_for_status()
+    data = response.json()
+    return {
+        "number": data["number"],
+        "title": data["title"],
+        "body": data.get("body") or "",
+        "url": data["html_url"],
+    }
+
+
 def get_open_issues(repo_name):
     """Fetch all open issues for a repo (excludes pull requests)."""
     url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"

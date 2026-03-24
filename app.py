@@ -3,7 +3,8 @@ from flask import Flask, request
 from twilio.rest import Client
 from dotenv import load_dotenv
 
-from github_helper import get_user_repos, get_repo_url, get_open_issues
+from github_helper import get_user_repos, get_repo_url, get_open_issues, get_issue_details
+from ai_helper import analyze_issue
 from sessions import get_session, set_session, clear_session
 from scheduler import start_scheduler
 
@@ -161,13 +162,33 @@ def webhook():
 
             if 1 <= choice <= len(issues):
                 issue = issues[choice - 1]
+                selected_repo = session.get("selected_repo")
+
+                # Send basic issue info immediately
                 send_message(
                     from_number,
                     f"🐛 *Issue #{issue['number']}*\n\n"
                     f"📌 {issue['title']}\n\n"
                     f"🔗 {issue['url']}\n\n"
-                    "_(More actions coming soon — AI fix, assign, close)_",
+                    "⏳ Analyzing with AI...",
                 )
+
+                # Fetch full issue body and run AI analysis
+                try:
+                    details = get_issue_details(selected_repo, issue["number"])
+                    suggestion = analyze_issue(details["title"], details["body"])
+                    send_message(
+                        from_number,
+                        f"🤖 *AI Analysis:*\n\n{suggestion}\n\n"
+                        "Reply with another issue number or *0* to go back.",
+                    )
+                except Exception as e:
+                    print(f"AI analysis error: {e}")
+                    send_message(
+                        from_number,
+                        "⚠️ AI analysis unavailable right now.\n\n"
+                        "Reply with another issue number or *0* to go back.",
+                    )
                 # Stay in same state so they can pick another issue
             else:
                 send_message(

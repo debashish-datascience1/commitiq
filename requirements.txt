@@ -3,3 +3,4 @@ twilio
 apscheduler
 requests
 python-dotenv
+boto3
