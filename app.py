@@ -227,13 +227,27 @@ def webhook():
 
         try:
             new_issue = create_issue(selected_repo, title, body)
-            set_session(from_number, state="awaiting_issue_choice", new_issue_title=None)
             send_message(
                 from_number,
                 f"✅ *Issue Created Successfully!*\n\n"
                 f"📌 {title}\n"
-                f"🔗 {new_issue['url']}\n\n"
-                "Reply with an issue number to view details, *N* to create another, or *0* to go back.",
+                f"🔗 {new_issue['url']}",
+            )
+
+            # Re-fetch updated issue list and show it
+            issues = get_open_issues(selected_repo)
+            set_session(from_number, state="awaiting_issue_choice", issues=issues, new_issue_title=None)
+            issue_list = "\n".join(
+                f"{i + 1}. #{issue['number']} — {issue['title']}"
+                for i, issue in enumerate(issues)
+            )
+            send_message(
+                from_number,
+                f"🐛 *Open Issues in {selected_repo}:*\n\n"
+                f"{issue_list}\n\n"
+                f"Reply with the *number* to view details & AI analysis\n"
+                f"Reply *N* to create a new issue\n"
+                f"Or reply *0* to go back to repo list",
             )
         except Exception as e:
             print(f"Create issue error: {e}")
