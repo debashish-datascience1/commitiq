@@ -44,6 +44,16 @@ def get_issue_details(repo_name, issue_number):
     }
 
 
+def create_issue(repo_name, title, body=""):
+    """Create a new issue in a repo."""
+    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"
+    payload = {"title": title, "body": body}
+    response = requests.post(url, headers=HEADERS, json=payload)
+    response.raise_for_status()
+    data = response.json()
+    return {"number": data["number"], "url": data["html_url"]}
+
+
 def get_open_issues(repo_name):
     """Fetch all open issues for a repo (excludes pull requests)."""
     url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"

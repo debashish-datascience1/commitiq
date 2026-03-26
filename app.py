@@ -3,7 +3,7 @@ from flask import Flask, request
 from twilio.rest import Client
 from dotenv import load_dotenv
 
-from github_helper import get_user_repos, get_repo_url, get_open_issues, get_issue_details
+from github_helper import get_user_repos, get_repo_url, get_open_issues, get_issue_details, create_issue
 from ai_helper import analyze_issue
 from sessions import get_session, set_session, clear_session
 from scheduler import start_scheduler
@@ -121,6 +121,7 @@ def webhook():
                         f"🐛 *Open Issues in {selected_repo}:*\n\n"
                         f"{issue_list}\n\n"
                         f"Reply with the *number* to view issue details\n"
+                        f"Reply *N* to create a new issue\n"
                         f"Or reply *0* to go back to repo list",
                     )
 
@@ -155,6 +156,14 @@ def webhook():
                 from_number,
                 f"📁 *Your GitHub Repositories:*\n\n{repo_list}\n\n"
                 "Reply with the *number* of the repo you want to work on.",
+            )
+
+        elif incoming_msg == "n":
+            set_session(from_number, state="awaiting_new_issue_title")
+            send_message(
+                from_number,
+                "📝 *Create a New Issue*\n\n"
+                "Please send the *title* of the issue.",
             )
 
         elif incoming_msg.isdigit():
@@ -198,8 +207,42 @@ def webhook():
         else:
             send_message(
                 from_number,
-                "⚠️ Reply with the issue *number* or *0* to go back to repo list.",
+                "⚠️ Reply with the issue *number*, *N* to create a new issue, or *0* to go back.",
             )
+
+    # ── STATE: awaiting new issue title ──────────────────────────────────────
+    elif session["state"] == "awaiting_new_issue_title":
+        set_session(from_number, state="awaiting_new_issue_body", new_issue_title=incoming_msg)
+        send_message(
+            from_number,
+            "📝 Got the title! Now send the *description* of the issue.\n\n"
+            "Or reply *skip* to create the issue without a description.",
+        )
+
+    # ── STATE: awaiting new issue body ───────────────────────────────────────
+    elif session["state"] == "awaiting_new_issue_body":
+        selected_repo = session.get("selected_repo")
+        title = session.get("new_issue_title", "")
+        body = "" if incoming_msg == "skip" else incoming_msg
+
+        try:
+            new_issue = create_issue(selected_repo, title, body)
+            set_session(from_number, state="awaiting_issue_choice", new_issue_title=None)
+            send_message(
+                from_number,
+                f"✅ *Issue Created Successfully!*\n\n"
+                f"📌 {title}\n"
+                f"🔗 {new_issue['url']}\n\n"
+                "Reply with an issue number to view details, *N* to create another, or *0* to go back.",
+            )
+        except Exception as e:
+            print(f"Create issue error: {e}")
+            send_message(
+                from_number,
+                "❌ Failed to create the issue. Please try again.\n"
+                "Reply *0* to go back to the repo list.",
+            )
+            set_session(from_number, state="awaiting_issue_choice")
 
     # ── Fallback ─────────────────────────────────────────────────────────────
     else:
