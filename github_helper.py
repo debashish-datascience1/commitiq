@@ -5,36 +5,41 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-GITHUB_USERNAME = os.getenv("GITHUB_USERNAME")
-
-HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github.v3+json",
-}
+_DEFAULT_TOKEN    = os.getenv("GITHUB_TOKEN")
+_DEFAULT_USERNAME = os.getenv("GITHUB_USERNAME")
 
 
-def get_user_repos():
+def _headers(token=None):
+    t = token or _DEFAULT_TOKEN
+    return {
+        "Authorization": f"token {t}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+
+def get_user_repos(token=None, username=None):
     """Fetch all repos sorted by last updated."""
-    url = f"https://api.github.com/users/{GITHUB_USERNAME}/repos"
-    params = {"per_page": 20, "sort": "updated"}
-    response = requests.get(url, headers=HEADERS, params=params)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/users/{username}/repos"
+    response = requests.get(url, headers=_headers(token), params={"per_page": 20, "sort": "updated"})
     response.raise_for_status()
     return [repo["name"] for repo in response.json()]
 
 
-def get_repo_url(repo_name):
+def get_repo_url(repo_name, token=None, username=None):
     """Get the HTML URL for a specific repo."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}"
-    response = requests.get(url, headers=HEADERS)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}"
+    response = requests.get(url, headers=_headers(token))
     response.raise_for_status()
     return response.json().get("html_url", "")
 
 
-def get_issue_details(repo_name, issue_number):
+def get_issue_details(repo_name, issue_number, token=None, username=None):
     """Fetch full details (title + body) of a single issue."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues/{issue_number}"
-    response = requests.get(url, headers=HEADERS)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/issues/{issue_number}"
+    response = requests.get(url, headers=_headers(token))
     response.raise_for_status()
     data = response.json()
     return {
@@ -45,51 +50,55 @@ def get_issue_details(repo_name, issue_number):
     }
 
 
-def create_issue(repo_name, title, body=""):
+def create_issue(repo_name, title, body="", token=None, username=None):
     """Create a new issue in a repo."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"
-    payload = {"title": title, "body": body}
-    response = requests.post(url, headers=HEADERS, json=payload)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/issues"
+    response = requests.post(url, headers=_headers(token), json={"title": title, "body": body})
     response.raise_for_status()
     data = response.json()
     return {"number": data["number"], "url": data["html_url"]}
 
 
-def get_repo_contents(repo_name, path=""):
+def get_repo_contents(repo_name, path="", token=None, username=None):
     """List files and folders at a given path in the repo."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/contents/{path}"
-    response = requests.get(url, headers=HEADERS)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/contents/{path}"
+    response = requests.get(url, headers=_headers(token))
     response.raise_for_status()
-    items = []
-    for item in response.json():
-        items.append({"name": item["name"], "type": item["type"], "path": item["path"]})
-    # Folders first, then files
+    items = [
+        {"name": item["name"], "type": item["type"], "path": item["path"]}
+        for item in response.json()
+    ]
     items.sort(key=lambda x: (0 if x["type"] == "dir" else 1, x["name"]))
     return items
 
 
-def get_file_content(repo_name, path):
+def get_file_content(repo_name, path, token=None, username=None):
     """Fetch decoded content and SHA of a file."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/contents/{path}"
-    response = requests.get(url, headers=HEADERS)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/contents/{path}"
+    response = requests.get(url, headers=_headers(token))
     response.raise_for_status()
     data = response.json()
     content = base64.b64decode(data["content"]).decode("utf-8")
     return {"content": content, "sha": data["sha"]}
 
 
-def get_repo_default_branch(repo_name):
+def get_repo_default_branch(repo_name, token=None, username=None):
     """Get the default branch name (main/master) of a repo."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}"
-    response = requests.get(url, headers=HEADERS)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}"
+    response = requests.get(url, headers=_headers(token))
     response.raise_for_status()
     return response.json().get("default_branch", "main")
 
 
-def commit_file_change(repo_name, path, new_content, sha, commit_message):
+def commit_file_change(repo_name, path, new_content, sha, commit_message, token=None, username=None):
     """Update a file in the repo with a new commit."""
-    branch = get_repo_default_branch(repo_name)
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/contents/{path}"
+    username = username or _DEFAULT_USERNAME
+    branch = get_repo_default_branch(repo_name, token=token, username=username)
+    url = f"https://api.github.com/repos/{username}/{repo_name}/contents/{path}"
     encoded = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
     payload = {
         "message": commit_message,
@@ -97,21 +106,19 @@ def commit_file_change(repo_name, path, new_content, sha, commit_message):
         "sha": sha,
         "branch": branch,
     }
-    response = requests.put(url, headers=HEADERS, json=payload)
+    response = requests.put(url, headers=_headers(token), json=payload)
     response.raise_for_status()
     return response.json()["commit"]["html_url"]
 
 
-def get_open_issues(repo_name):
+def get_open_issues(repo_name, token=None, username=None):
     """Fetch all open issues for a repo (excludes pull requests)."""
-    url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}/issues"
-    params = {"state": "open", "per_page": 20}
-    response = requests.get(url, headers=HEADERS, params=params)
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/issues"
+    response = requests.get(url, headers=_headers(token), params={"state": "open", "per_page": 20})
     response.raise_for_status()
-
     issues = []
     for item in response.json():
-        # GitHub API returns PRs as issues too — filter them out
         if "pull_request" not in item:
             issues.append({
                 "number": item["number"],

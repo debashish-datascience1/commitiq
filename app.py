@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 from twilio.rest import Client
 from dotenv import load_dotenv
 
@@ -14,6 +15,7 @@ from scheduler import start_scheduler
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 twilio_client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
 
@@ -43,15 +45,18 @@ def send_message(to: str, body: str):
     )
 
 
-def process_message(user_id: str, text: str) -> list:
+def process_message(user_id: str, text: str, gh_token: str = None, gh_username: str = None) -> list:
     """
-    Core state machine. Accepts a user_id (phone number or web session id)
-    and the raw message text. Returns a list of response strings.
+    Core state machine. Returns a list of response strings.
+    gh_token / gh_username override the .env credentials (used by web/extension users).
     """
     replies = []
 
     def reply(msg):
         replies.append(msg)
+
+    # Shorthand kwargs passed to every github_helper call
+    gh = {"token": gh_token, "username": gh_username}
 
     cmd = text.strip().lower()   # for command comparisons
     raw = text.strip()           # for user-typed content (titles, bodies, etc.)
@@ -66,17 +71,14 @@ def process_message(user_id: str, text: str) -> list:
         if cmd == "1":
             set_session(user_id, state="fetching_repos")
             try:
-                repos = get_user_repos()
+                repos = get_user_repos(**gh)
                 if not repos:
                     reply("⚠️ No repositories found on your GitHub account.")
                     clear_session(user_id)
                     return replies
 
                 set_session(user_id, state="awaiting_repo_choice", repos=repos)
-
-                repo_list = "\n".join(
-                    f"{i + 1}. {name}" for i, name in enumerate(repos)
-                )
+                repo_list = "\n".join(f"{i + 1}. {name}" for i, name in enumerate(repos))
                 reply(
                     f"📁 *Your GitHub Repositories:*\n\n{repo_list}\n\n"
                     "Reply with the *number* of the repo you want to work on.",
@@ -107,7 +109,6 @@ def process_message(user_id: str, text: str) -> list:
 
         if cmd.isdigit():
             choice = int(cmd)
-
             if 1 <= choice <= len(repos):
                 selected_repo = repos[choice - 1]
                 set_session(user_id, state="awaiting_repo_action", selected_repo=selected_repo)
@@ -130,9 +131,7 @@ def process_message(user_id: str, text: str) -> list:
 
         if cmd == "0":
             set_session(user_id, state="awaiting_repo_choice")
-            repo_list = "\n".join(
-                f"{i + 1}. {name}" for i, name in enumerate(repos)
-            )
+            repo_list = "\n".join(f"{i + 1}. {name}" for i, name in enumerate(repos))
             reply(
                 f"📁 *Your GitHub Repositories:*\n\n{repo_list}\n\n"
                 "Reply with the *number* of the repo you want to work on.",
@@ -140,14 +139,10 @@ def process_message(user_id: str, text: str) -> list:
 
         elif cmd == "n":
             set_session(user_id, state="awaiting_new_issue_title")
-            reply(
-                "📝 *Create a New Issue*\n\n"
-                "Please send the *title* of the issue.",
-            )
+            reply("📝 *Create a New Issue*\n\nPlease send the *title* of the issue.")
 
         elif cmd.isdigit():
             choice = int(cmd)
-
             if 1 <= choice <= len(issues):
                 issue = issues[choice - 1]
                 selected_repo = session.get("selected_repo")
@@ -160,7 +155,7 @@ def process_message(user_id: str, text: str) -> list:
                 )
 
                 try:
-                    details = get_issue_details(selected_repo, issue["number"])
+                    details = get_issue_details(selected_repo, issue["number"], **gh)
                     suggestion = analyze_issue(details["title"], details["body"])
                     reply(
                         f"🤖 *AI Analysis:*\n\n{suggestion}\n\n"
@@ -192,32 +187,27 @@ def process_message(user_id: str, text: str) -> list:
         body = "" if cmd == "skip" else raw
 
         try:
-            new_issue = create_issue(selected_repo, title, body)
+            new_issue = create_issue(selected_repo, title, body, **gh)
             reply(
                 f"✅ *Issue Created Successfully!*\n\n"
                 f"📌 {title}\n"
                 f"🔗 {new_issue['url']}",
             )
-
-            issues = get_open_issues(selected_repo)
+            issues = get_open_issues(selected_repo, **gh)
             set_session(user_id, state="awaiting_issue_choice", issues=issues, new_issue_title=None)
             issue_list = "\n".join(
                 f"{i + 1}. #{issue['number']} — {issue['title']}"
                 for i, issue in enumerate(issues)
             )
             reply(
-                f"🐛 *Open Issues in {selected_repo}:*\n\n"
-                f"{issue_list}\n\n"
-                f"Reply with the *number* to view details & AI analysis\n"
-                f"Reply *N* to create a new issue\n"
-                f"Or reply *0* to go back to repo list",
+                f"🐛 *Open Issues in {selected_repo}:*\n\n{issue_list}\n\n"
+                "Reply with the *number* to view details & AI analysis\n"
+                "Reply *N* to create a new issue\n"
+                "Or reply *0* to go back to repo list",
             )
         except Exception as e:
             print(f"Create issue error: {e}")
-            reply(
-                "❌ Failed to create the issue. Please try again.\n"
-                "Reply *0* to go back to the repo list.",
-            )
+            reply("❌ Failed to create the issue. Please try again.\nReply *0* to go back to the repo list.")
             set_session(user_id, state="awaiting_issue_choice")
 
     # ── STATE: repo action menu ───────────────────────────────────────────────
@@ -232,7 +222,7 @@ def process_message(user_id: str, text: str) -> list:
 
         elif cmd == "1":
             try:
-                issues = get_open_issues(selected_repo)
+                issues = get_open_issues(selected_repo, **gh)
                 set_session(user_id, state="awaiting_issue_choice", issues=issues)
                 if not issues:
                     reply(f"🎉 *{selected_repo}* has no open issues!\n\nReply *N* to create one or *0* to go back.")
@@ -245,12 +235,9 @@ def process_message(user_id: str, text: str) -> list:
 
         elif cmd == "2":
             try:
-                items = get_repo_contents(selected_repo, "")
+                items = get_repo_contents(selected_repo, "", **gh)
                 set_session(user_id, state="browsing_files", current_path="", dir_contents=items)
-                lines = []
-                for i, item in enumerate(items):
-                    icon = "📁" if item["type"] == "dir" else "📄"
-                    lines.append(f"{i + 1}. {icon} {item['name']}")
+                lines = [f"{i + 1}. {'📁' if item['type'] == 'dir' else '📄'} {item['name']}" for i, item in enumerate(items)]
                 reply(f"📂 *{selected_repo}/*\n\n" + "\n".join(lines) + "\n\nReply with the *number* to open\nReply *0* to go back")
             except Exception as e:
                 print(f"File browse error: {e}")
@@ -272,12 +259,9 @@ def process_message(user_id: str, text: str) -> list:
             else:
                 parent = "/".join(current_path.split("/")[:-1])
                 try:
-                    parent_items = get_repo_contents(selected_repo, parent)
+                    parent_items = get_repo_contents(selected_repo, parent, **gh)
                     set_session(user_id, state="browsing_files", current_path=parent, dir_contents=parent_items)
-                    lines = []
-                    for i, item in enumerate(parent_items):
-                        icon = "📁" if item["type"] == "dir" else "📄"
-                        lines.append(f"{i + 1}. {icon} {item['name']}")
+                    lines = [f"{i + 1}. {'📁' if item['type'] == 'dir' else '📄'} {item['name']}" for i, item in enumerate(parent_items)]
                     path_display = f"{selected_repo}/{parent}" if parent else f"{selected_repo}/"
                     reply(f"📂 *{path_display}*\n\n" + "\n".join(lines) + "\n\nReply with the *number* to open\nReply *0* to go back")
                 except Exception as e:
@@ -290,12 +274,9 @@ def process_message(user_id: str, text: str) -> list:
                 selected_item = items[choice - 1]
                 if selected_item["type"] == "dir":
                     try:
-                        sub_items = get_repo_contents(selected_repo, selected_item["path"])
+                        sub_items = get_repo_contents(selected_repo, selected_item["path"], **gh)
                         set_session(user_id, state="browsing_files", current_path=selected_item["path"], dir_contents=sub_items)
-                        lines = []
-                        for i, item in enumerate(sub_items):
-                            icon = "📁" if item["type"] == "dir" else "📄"
-                            lines.append(f"{i + 1}. {icon} {item['name']}")
+                        lines = [f"{i + 1}. {'📁' if item['type'] == 'dir' else '📄'} {item['name']}" for i, item in enumerate(sub_items)]
                         reply(f"📂 *{selected_repo}/{selected_item['path']}/*\n\n" + "\n".join(lines) + "\n\nReply with the *number* to open\nReply *0* to go back")
                     except Exception as e:
                         print(f"Folder open error: {e}")
@@ -322,12 +303,9 @@ def process_message(user_id: str, text: str) -> list:
         if cmd == "0":
             current_path = "/".join(selected_file.split("/")[:-1])
             try:
-                items = get_repo_contents(selected_repo, current_path)
+                items = get_repo_contents(selected_repo, current_path, **gh)
                 set_session(user_id, state="browsing_files", current_path=current_path, dir_contents=items)
-                lines = []
-                for i, item in enumerate(items):
-                    icon = "📁" if item["type"] == "dir" else "📄"
-                    lines.append(f"{i + 1}. {icon} {item['name']}")
+                lines = [f"{i + 1}. {'📁' if item['type'] == 'dir' else '📄'} {item['name']}" for i, item in enumerate(items)]
                 path_display = f"{selected_repo}/{current_path}" if current_path else f"{selected_repo}/"
                 reply(f"📂 *{path_display}*\n\n" + "\n".join(lines) + "\n\nReply with the *number* to open\nReply *0* to go back")
             except Exception as e:
@@ -356,10 +334,9 @@ def process_message(user_id: str, text: str) -> list:
         selected_file = session.get("selected_file")
         file_action = session.get("file_action")
         comment_text = session.get("comment_text", "")
-        commit_message = raw
 
         try:
-            file_data = get_file_content(selected_repo, selected_file)
+            file_data = get_file_content(selected_repo, selected_file, **gh)
             original = file_data["content"]
             sha = file_data["sha"]
             filename = selected_file.split("/")[-1]
@@ -370,12 +347,12 @@ def process_message(user_id: str, text: str) -> list:
                 comment_line = _comment_line(filename, comment_text)
                 new_content = original.rstrip("\n") + f"\n{comment_line}\n"
 
-            commit_url = commit_file_change(selected_repo, selected_file, new_content, sha, commit_message)
+            commit_url = commit_file_change(selected_repo, selected_file, new_content, sha, raw, **gh)
             set_session(user_id, state="awaiting_repo_action")
             reply(
                 f"🚀 *Commit Successful!*\n\n"
                 f"📄 File: `{selected_file}`\n"
-                f"💬 Message: _{commit_message}_\n"
+                f"💬 Message: _{raw}_\n"
                 f"🔗 {commit_url}\n\n"
                 "Reply *1* to view issues, *2* to make another commit, or *0* to go back to repo list.",
             )
@@ -421,11 +398,13 @@ def chat():
 @app.route("/api/message", methods=["POST"])
 def api_message():
     data = request.get_json()
-    session_id = data.get("session_id", "web-user")
-    text = data.get("message", "")
+    session_id  = data.get("session_id", "web-user")
+    text        = data.get("message", "")
+    gh_token    = data.get("gh_token") or None
+    gh_username = data.get("gh_username") or None
     if not text:
         return jsonify({"responses": []}), 400
-    responses = process_message(session_id, text)
+    responses = process_message(session_id, text, gh_token=gh_token, gh_username=gh_username)
     return jsonify({"responses": responses})
 
 

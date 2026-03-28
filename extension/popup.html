@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CommitIQ</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ── Setup / Settings screen (shown before credentials saved) ── -->
+  <div id="setup-screen">
+    <div class="setup-header">
+      <div class="header-icon">🤖</div>
+      <h1>CommitIQ</h1>
+      <p>Connect your GitHub account to get started</p>
+    </div>
+
+    <div class="setup-body">
+      <div class="field">
+        <label for="input-username">GitHub Username</label>
+        <input type="text" id="input-username" placeholder="e.g. octocat" autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="field">
+        <label for="input-token">
+          Personal Access Token
+          <a href="https://github.com/settings/tokens/new?scopes=repo&description=CommitIQ" target="_blank" class="help-link" title="Create token on GitHub">+ Create token</a>
+        </label>
+        <div class="token-wrap">
+          <input type="password" id="input-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" spellcheck="false" />
+          <button id="toggle-token" type="button" title="Show / hide token">👁</button>
+        </div>
+        <span class="hint">Needs <code>repo</code> scope. Token is stored only in your browser.</span>
+      </div>
+
+      <div id="setup-error" class="setup-error" style="display:none;"></div>
+
+      <button id="setup-save" class="save-btn">Connect →</button>
+    </div>
+  </div>
+
+  <!-- ── Main chat screen ── -->
+  <div id="chat-screen" style="display:none;">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">🤖</div>
+      <div class="header-text">
+        <h1>CommitIQ</h1>
+        <p id="header-username">GitHub assistant</p>
+      </div>
+      <div class="header-right">
+        <div class="status-dot" id="status-dot" title="Server online"></div>
+        <button id="settings-btn" title="Change GitHub account">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Offline banner -->
+    <div class="offline-banner" id="offline-banner" style="display:none;">
+      ⚠️ Flask server offline — run <code>python app.py</code>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messages">
+      <div class="welcome">
+        <div class="icon">🚀</div>
+        <h2>CommitIQ</h2>
+        <p>Browse repos, manage issues,<br>and make commits — no WhatsApp needed.</p>
+      </div>
+    </div>
+
+    <!-- Quick reply chips -->
+    <div class="chips" id="chips"></div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <textarea
+        id="input"
+        placeholder="Type a message or number…"
+        rows="1"
+        autocomplete="off"
+        spellcheck="false"
+      ></textarea>
+      <button id="send-btn" title="Send (Enter)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

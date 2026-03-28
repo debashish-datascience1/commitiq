@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "CommitIQ",
+  "version": "1.0",
+  "description": "Browse GitHub repos, manage issues, and make commits via AI — right from your browser.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CommitIQ"
+  },
+  "host_permissions": [
+    "http://localhost:5001/*"
+  ],
+  "permissions": [
+    "storage"
+  ]
+}
