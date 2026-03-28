@@ -1,9 +1,8 @@
-let SERVER = "http://localhost:5001";   // overwritten from storage on boot
+const SERVER = "https://commitiq-production.up.railway.app";  // your deployed backend
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const setupScreen  = document.getElementById("setup-screen");
 const chatScreen   = document.getElementById("chat-screen");
-const inputServer  = document.getElementById("input-server");
 const inputUsername = document.getElementById("input-username");
 const inputToken   = document.getElementById("input-token");
 const toggleToken  = document.getElementById("toggle-token");
@@ -31,13 +30,12 @@ chrome.storage.local.get(["commitiq_creds", "commitiq_session", "commitiq_histor
 
   chrome.storage.local.set({ commitiq_session: SESSION_ID });
 
-  if (creds && creds.token && creds.username && creds.server) {
+  if (creds && creds.token && creds.username) {
     GH_TOKEN    = creds.token;
     GH_USERNAME = creds.username;
-    SERVER      = creds.server.replace(/\/$/, "");
     showChat();
   } else {
-    showSetup({ server: creds?.server });
+    showSetup();
   }
 });
 
@@ -45,7 +43,6 @@ chrome.storage.local.get(["commitiq_creds", "commitiq_session", "commitiq_histor
 function showSetup(prefill = {}) {
   setupScreen.style.display = "flex";
   chatScreen.style.display  = "none";
-  if (prefill.server)   inputServer.value   = prefill.server;
   if (prefill.username) inputUsername.value = prefill.username;
   setupError.style.display = "none";
 }
@@ -71,16 +68,11 @@ toggleToken.addEventListener("click", () => {
 });
 
 setupSave.addEventListener("click", async () => {
-  const server   = inputServer.value.trim().replace(/\/$/, "");
   const username = inputUsername.value.trim();
   const token    = inputToken.value.trim();
 
-  if (!server || !username || !token) {
-    showSetupError("Please fill in all three fields.");
-    return;
-  }
-  if (!/^https?:\/\/.+/.test(server)) {
-    showSetupError("Server URL must start with http:// or https://");
+  if (!username || !token) {
+    showSetupError("Please fill in both fields.");
     return;
   }
   if (!token.startsWith("ghp_") && !token.startsWith("github_pat_") && token.length < 20) {
@@ -101,10 +93,9 @@ setupSave.addEventListener("click", async () => {
 
     GH_TOKEN    = token;
     GH_USERNAME = username;
-    SERVER      = server;
 
     chrome.storage.local.set({
-      commitiq_creds: { token, username, server },
+      commitiq_creds: { token, username },
       commitiq_history: [],
       commitiq_session: SESSION_ID,
     });
@@ -134,7 +125,7 @@ function showSetupError(msg) {
 
 // Settings gear → go back to setup screen pre-filled
 settingsBtn.addEventListener("click", () => {
-  showSetup({ server: SERVER, username: GH_USERNAME });
+  showSetup({ username: GH_USERNAME });
 });
 
 // ── Quick-reply chips ─────────────────────────────────────────────────────────

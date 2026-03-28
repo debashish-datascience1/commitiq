@@ -18,10 +18,7 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
-    "http://localhost:5001/*",
-    "https://*.railway.app/*",
-    "https://*.onrender.com/*",
-    "https://*.fly.dev/*"
+    "https://commitiq-production.up.railway.app/*"
   ],
   "permissions": [
     "storage"
