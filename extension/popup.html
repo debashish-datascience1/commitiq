@@ -17,6 +17,15 @@
 
     <div class="setup-body">
       <div class="field">
+        <label for="input-server">
+          Backend Server URL
+          <a href="https://railway.app" target="_blank" class="help-link" title="Deploy on Railway">Deploy free →</a>
+        </label>
+        <input type="url" id="input-server" placeholder="https://your-app.railway.app" autocomplete="off" spellcheck="false" />
+        <span class="hint">Deploy the CommitIQ Flask backend and paste its URL here.</span>
+      </div>
+
+      <div class="field">
         <label for="input-username">GitHub Username</label>
         <input type="text" id="input-username" placeholder="e.g. octocat" autocomplete="off" spellcheck="false" />
       </div>
