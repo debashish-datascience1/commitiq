@@ -1,44 +1,37 @@
-import boto3
-import json
 import os
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
-MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
-
-bedrock = boto3.client(
-    service_name="bedrock-runtime",
-    region_name=AWS_REGION,
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL_ID     = "llama-3.3-70b-versatile"
 
 
 def analyze_issue(title: str, body: str) -> str:
-    """Send a GitHub issue to Claude Haiku via Bedrock and return a fix suggestion."""
+    """Analyze a GitHub issue using Groq (Llama 3.3 70B) and return a fix suggestion."""
     issue_body = body.strip() if body else "No description provided."
 
     prompt = (
-        f"You are a helpful software engineering assistant. "
-        f"Analyze this GitHub issue and provide a concise, actionable fix suggestion in 3-5 sentences.\n\n"
+        "You are a helpful software engineering assistant. "
+        "Analyze this GitHub issue and provide a concise, actionable fix suggestion in 3-5 sentences.\n\n"
         f"Issue Title: {title}\n\n"
         f"Issue Description:\n{issue_body}"
     )
 
-    payload = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 300,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    response = bedrock.invoke_model(
-        modelId=MODEL_ID,
-        body=json.dumps(payload),
-        contentType="application/json",
-        accept="application/json",
+    response = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL_ID,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.3,
+        },
     )
-
-    result = json.loads(response["body"].read())
-    return result["content"][0]["text"].strip()
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
