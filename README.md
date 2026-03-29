@@ -7,7 +7,7 @@
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-yellow?style=flat-square&logo=googlechrome)](https://developer.chrome.com/docs/extensions/)
 [![Twilio](https://img.shields.io/badge/Twilio-WhatsApp-red?style=flat-square&logo=twilio)](https://twilio.com)
 [![GitHub API](https://img.shields.io/badge/GitHub-API-black?style=flat-square&logo=github)](https://docs.github.com/en/rest)
-[![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock-orange?style=flat-square&logo=amazonaws)](https://aws.amazon.com/bedrock/)
+[![Groq](https://img.shields.io/badge/Groq-Llama%203.3-orange?style=flat-square&logo=groq)](https://groq.com)
 [![Railway](https://img.shields.io/badge/Deployed-Railway-purple?style=flat-square&logo=railway)](https://railway.app)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
@@ -31,7 +31,7 @@ It works across **three interfaces**:
 - 📁 **GitHub Repo Listing** — Fetches your 20 most recently updated repositories
 - 🔀 **Repo Action Menu** — Choose between managing issues or making a commit
 - 🐛 **Issue Management** — Browse open issues, view details, and create new issues
-- 🤖 **AI Issue Analysis** — Powered by AWS Bedrock (Claude 3 Haiku): actionable fix suggestions
+- 🤖 **AI Issue Analysis** — Powered by Groq (Llama 3.3 70B, free): actionable fix suggestions for any open issue
 - 📂 **File Browser** — Navigate repo folders and files interactively
 - 💾 **Commit from Chat** — Add a blank line or comment, write a commit message, push to GitHub
 - 🌐 **Web Chat UI** — Full chat interface at `/chat`, no WhatsApp or Twilio required
@@ -86,7 +86,7 @@ commitiq/
 | WhatsApp API | Twilio WhatsApp Sandbox |
 | Browser Extension | Chrome Extension (Manifest V3) |
 | GitHub Integration | GitHub REST API v3 |
-| AI | AWS Bedrock — Claude 3 Haiku |
+| AI | Groq — Llama 3.3 70B (free tier, 14,400 req/day) |
 | Scheduler | APScheduler |
 | Deployment | Railway (cloud) / Gunicorn |
 | Config | python-dotenv |
@@ -100,7 +100,7 @@ commitiq/
 #### Prerequisites
 - Python 3.9+
 - A [GitHub Personal Access Token](https://github.com/settings/tokens) (`repo` scope)
-- AWS account with Bedrock access (for AI analysis)
+- A [Groq API key](https://console.groq.com) (free, no credit card needed)
 - Twilio account (optional — only needed for WhatsApp reminders)
 
 #### 1. Clone & Install
@@ -118,9 +118,7 @@ Create a `.env` file:
 GITHUB_USERNAME=your_github_username
 GITHUB_TOKEN=your_github_personal_access_token
 
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_REGION=ap-south-1
+GROQ_API_KEY=your_groq_api_key
 
 # Optional — only needed for WhatsApp reminders
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
@@ -173,9 +171,7 @@ railway up
 ```
 GITHUB_TOKEN
 GITHUB_USERNAME
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_REGION
+GROQ_API_KEY
 ```
 
 3. Go to your service → **Settings** → **Networking** → **Generate Domain**
@@ -269,9 +265,7 @@ Bot: "Do you want to commit today?"  1=Yes / 2=No
 |---|---|---|
 | `GITHUB_USERNAME` | Yes | Your GitHub username |
 | `GITHUB_TOKEN` | Yes | GitHub Personal Access Token (`repo` scope) |
-| `AWS_ACCESS_KEY_ID` | Yes | AWS credentials for Bedrock |
-| `AWS_SECRET_ACCESS_KEY` | Yes | AWS credentials for Bedrock |
-| `AWS_REGION` | Yes | AWS region where Bedrock is enabled (e.g. `ap-south-1`) |
+| `GROQ_API_KEY` | Yes | Groq API key — free at [console.groq.com](https://console.groq.com) |
 | `TWILIO_ACCOUNT_SID` | Optional | Twilio Account SID (WhatsApp only) |
 | `TWILIO_AUTH_TOKEN` | Optional | Twilio Auth Token (WhatsApp only) |
 | `TWILIO_WHATSAPP_FROM` | Optional | Twilio sandbox WhatsApp number |
@@ -285,7 +279,7 @@ Bot: "Do you want to commit today?"  1=Yes / 2=No
 - [x] Daily WhatsApp reminder at 10 AM
 - [x] GitHub repo listing
 - [x] Repo action menu (Issues vs Commit)
-- [x] View open issues with AI analysis (AWS Bedrock — Claude 3 Haiku)
+- [x] View open issues with AI analysis (Groq — Llama 3.3 70B, free)
 - [x] Create new GitHub issues from chat
 - [x] File browser — navigate folders and files interactively
 - [x] Commit from chat — add blank line or comment, push with custom message
