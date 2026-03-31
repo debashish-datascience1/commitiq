@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 from github_helper import (
     get_user_repos, get_open_issues, get_issue_details,
     create_issue, get_repo_contents, get_file_content, commit_file_change,
+    get_branches, create_branch, get_branch_commits, create_pull_request,
 )
-from ai_helper import analyze_issue
+from ai_helper import analyze_issue, generate_pr_description
 from sessions import get_session, set_session, clear_session
 from scheduler import start_scheduler
 
@@ -116,7 +117,9 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                     f"📂 *{selected_repo}*\n\n"
                     "What would you like to do?\n\n"
                     "1️⃣ *1* — View & manage issues\n"
-                    "2️⃣ *2* — Make a commit\n"
+                    "2️⃣ *2* — Browse files & commit\n"
+                    "3️⃣ *3* — Manage branches\n"
+                    "4️⃣ *4* — Create a pull request\n"
                     "0️⃣ *0* — Back to repo list",
                 )
             else:
@@ -243,8 +246,34 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                 print(f"File browse error: {e}")
                 reply("❌ Could not fetch repo contents. Please try again.")
 
+        elif cmd == "3":
+            try:
+                branches = get_branches(selected_repo, **gh)
+                set_session(user_id, state="awaiting_branch_action", branches=branches)
+                branch_list = "\n".join(f"{i + 1}. 🌿 {b}" for i, b in enumerate(branches))
+                reply(
+                    f"🌿 *Branches in {selected_repo}:*\n\n{branch_list}\n\n"
+                    "Reply *2* to create a new branch or *0* to go back."
+                )
+            except Exception as e:
+                print(f"Branch fetch error: {e}")
+                reply("❌ Could not fetch branches. Please try again.")
+
+        elif cmd == "4":
+            try:
+                branches = get_branches(selected_repo, **gh)
+                if len(branches) < 2:
+                    reply("⚠️ You need at least *2 branches* to create a pull request.\n\nReply *3* to create a branch first.")
+                else:
+                    set_session(user_id, state="awaiting_pr_head_branch", branches=branches)
+                    branch_list = "\n".join(f"{i + 1}. 🌿 {b}" for i, b in enumerate(branches))
+                    reply(f"📤 *Select the head branch* (the branch with your changes):\n\n{branch_list}\n\nReply *0* to go back.")
+            except Exception as e:
+                print(f"Branch fetch error: {e}")
+                reply("❌ Could not fetch branches. Please try again.")
+
         else:
-            reply("⚠️ Reply *1* for issues, *2* to make a commit, or *0* to go back.")
+            reply("⚠️ Reply *1* for issues, *2* to browse files, *3* for branches, *4* to create a PR, or *0* to go back.")
 
     # ── STATE: browsing files ─────────────────────────────────────────────────
     elif session["state"] == "browsing_files":
@@ -255,7 +284,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
         if cmd == "0":
             if current_path == "":
                 set_session(user_id, state="awaiting_repo_action")
-                reply(f"📂 *{selected_repo}*\n\nWhat would you like to do?\n\n1️⃣ *1* — View & manage issues\n2️⃣ *2* — Make a commit\n0️⃣ *0* — Back to repo list")
+                reply(f"📂 *{selected_repo}*\n\nWhat would you like to do?\n\n1️⃣ *1* — View & manage issues\n2️⃣ *2* — Browse files & commit\n3️⃣ *3* — Manage branches\n4️⃣ *4* — Create a pull request\n0️⃣ *0* — Back to repo list")
             else:
                 parent = "/".join(current_path.split("/")[:-1])
                 try:
@@ -359,6 +388,152 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
         except Exception as e:
             print(f"Commit error: {e}")
             reply("❌ Commit failed. Please try again.\n\nReply *1* for issues or *2* to try committing again.")
+            set_session(user_id, state="awaiting_repo_action")
+
+    # ── STATE: branch action menu ─────────────────────────────────────────────
+    elif session["state"] == "awaiting_branch_action":
+        selected_repo = session.get("selected_repo")
+        branches = session.get("branches", [])
+
+        if cmd == "0":
+            set_session(user_id, state="awaiting_repo_action")
+            reply(
+                f"📂 *{selected_repo}*\n\n"
+                "What would you like to do?\n\n"
+                "1️⃣ *1* — View & manage issues\n"
+                "2️⃣ *2* — Browse files & commit\n"
+                "3️⃣ *3* — Manage branches\n"
+                "4️⃣ *4* — Create a pull request\n"
+                "0️⃣ *0* — Back to repo list",
+            )
+
+        elif cmd == "1":
+            try:
+                branches = get_branches(selected_repo, **gh)
+                set_session(user_id, branches=branches)
+                branch_list = "\n".join(f"{i + 1}. 🌿 {b}" for i, b in enumerate(branches))
+                reply(f"🌿 *Branches in {selected_repo}:*\n\n{branch_list}\n\nReply *2* to create a new branch or *0* to go back.")
+            except Exception as e:
+                print(f"Branch fetch error: {e}")
+                reply("❌ Could not fetch branches. Please try again.")
+
+        elif cmd == "2":
+            set_session(user_id, state="awaiting_new_branch_name")
+            reply("🌿 *Create a New Branch*\n\nWhat should the branch be named?\n_(e.g. `feature/dark-mode`, `fix/login-bug`)_")
+
+        else:
+            reply("⚠️ Reply *1* to list branches, *2* to create a new branch, or *0* to go back.")
+
+    # ── STATE: awaiting new branch name ──────────────────────────────────────
+    elif session["state"] == "awaiting_new_branch_name":
+        selected_repo = session.get("selected_repo")
+        branch_name = raw.strip().replace(" ", "-")
+
+        try:
+            default_branch = get_repo_default_branch(selected_repo, **gh)
+            create_branch(selected_repo, branch_name, default_branch, **gh)
+            branches = get_branches(selected_repo, **gh)
+            set_session(user_id, state="awaiting_branch_action", branches=branches)
+            reply(
+                f"✅ *Branch Created!*\n\n"
+                f"🌿 `{branch_name}` (from `{default_branch}`)\n\n"
+                "Reply *1* to list all branches, *2* to create another, or *0* to go back.",
+            )
+        except Exception as e:
+            print(f"Branch create error: {e}")
+            reply("❌ Could not create the branch. Check the name and try again.\n\nReply *2* to retry or *0* to go back.")
+            set_session(user_id, state="awaiting_branch_action")
+
+    # ── STATE: select head branch for PR ─────────────────────────────────────
+    elif session["state"] == "awaiting_pr_head_branch":
+        branches = session.get("branches", [])
+        selected_repo = session.get("selected_repo")
+
+        if cmd == "0":
+            set_session(user_id, state="awaiting_repo_action")
+            reply(
+                f"📂 *{selected_repo}*\n\n"
+                "What would you like to do?\n\n"
+                "1️⃣ *1* — View & manage issues\n"
+                "2️⃣ *2* — Browse files & commit\n"
+                "3️⃣ *3* — Manage branches\n"
+                "4️⃣ *4* — Create a pull request\n"
+                "0️⃣ *0* — Back to repo list",
+            )
+
+        elif cmd.isdigit():
+            choice = int(cmd)
+            if 1 <= choice <= len(branches):
+                head_branch = branches[choice - 1]
+                base_candidates = [b for b in branches if b != head_branch]
+                set_session(user_id, state="awaiting_pr_base_branch", pr_head=head_branch, pr_base_candidates=base_candidates)
+                branch_list = "\n".join(f"{i + 1}. 🌿 {b}" for i, b in enumerate(base_candidates))
+                reply(
+                    f"✅ Head branch: `{head_branch}`\n\n"
+                    f"📥 *Select the base branch* (where to merge into):\n\n{branch_list}\n\n"
+                    "Reply *0* to go back."
+                )
+            else:
+                reply(f"⚠️ Please enter a number between 1 and {len(branches)}.")
+
+        else:
+            reply("⚠️ Reply with the *number* of the branch or *0* to go back.")
+
+    # ── STATE: select base branch for PR ─────────────────────────────────────
+    elif session["state"] == "awaiting_pr_base_branch":
+        base_candidates = session.get("pr_base_candidates", [])
+        pr_head = session.get("pr_head")
+
+        if cmd == "0":
+            branches = session.get("branches", [])
+            branch_list = "\n".join(f"{i + 1}. 🌿 {b}" for i, b in enumerate(branches))
+            set_session(user_id, state="awaiting_pr_head_branch")
+            reply(f"📤 *Select the head branch* (your changes):\n\n{branch_list}\n\nReply *0* to go back.")
+
+        elif cmd.isdigit():
+            choice = int(cmd)
+            if 1 <= choice <= len(base_candidates):
+                base_branch = base_candidates[choice - 1]
+                set_session(user_id, state="awaiting_pr_title", pr_base=base_branch)
+                reply(f"✅ Merging `{pr_head}` → `{base_branch}`\n\n📝 What should the *PR title* be?")
+            else:
+                reply(f"⚠️ Please enter a number between 1 and {len(base_candidates)}.")
+
+        else:
+            reply("⚠️ Reply with the *number* of the base branch or *0* to go back.")
+
+    # ── STATE: awaiting PR title → create PR with AI description ─────────────
+    elif session["state"] == "awaiting_pr_title":
+        selected_repo = session.get("selected_repo")
+        pr_head = session.get("pr_head")
+        pr_base = session.get("pr_base")
+
+        reply("⏳ Generating PR description with AI...")
+
+        try:
+            commits = get_branch_commits(selected_repo, pr_head, pr_base, **gh)
+            description = generate_pr_description(selected_repo, pr_head, pr_base, commits)
+        except Exception as e:
+            print(f"PR description generation error: {e}")
+            description = ""
+
+        try:
+            pr = create_pull_request(selected_repo, raw, description, pr_head, pr_base, **gh)
+            set_session(user_id, state="awaiting_repo_action")
+            reply(
+                f"🎉 *Pull Request Created!*\n\n"
+                f"📌 {raw}\n"
+                f"🌿 `{pr_head}` → `{pr_base}`\n"
+                f"🔗 {pr['url']}\n\n"
+                "Reply *1* for issues, *2* to commit, or *0* to go back to repo list.",
+            )
+        except Exception as e:
+            print(f"PR create error: {e}")
+            reply(
+                "❌ Could not create the pull request.\n"
+                "Make sure there are commits between the two branches.\n\n"
+                "Reply *0* to go back.",
+            )
             set_session(user_id, state="awaiting_repo_action")
 
     # ── Fallback ─────────────────────────────────────────────────────────────

@@ -9,6 +9,36 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID     = "llama-3.3-70b-versatile"
 
 
+def generate_pr_description(repo_name: str, head: str, base: str, commits: list) -> str:
+    """Generate a PR description from branch info and commit messages using Groq."""
+    commits_text = "\n".join(f"- {c}" for c in commits) if commits else "- (no commits listed)"
+
+    prompt = (
+        "You are a helpful software engineering assistant. "
+        "Write a concise GitHub pull request description (2-4 sentences) based on:\n\n"
+        f"Repository: {repo_name}\n"
+        f"Merging: {head} → {base}\n"
+        f"Commits:\n{commits_text}\n\n"
+        "Focus on what changes were made and why. Be professional and clear."
+    )
+
+    response = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL_ID,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 200,
+            "temperature": 0.4,
+        },
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+
 def analyze_issue(title: str, body: str) -> str:
     """Analyze a GitHub issue using Groq (Llama 3.3 70B) and return a fix suggestion."""
     issue_body = body.strip() if body else "No description provided."

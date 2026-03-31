@@ -111,6 +111,57 @@ def commit_file_change(repo_name, path, new_content, sha, commit_message, token=
     return response.json()["commit"]["html_url"]
 
 
+def get_branches(repo_name, token=None, username=None):
+    """List all branches in a repo."""
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/branches"
+    response = requests.get(url, headers=_headers(token), params={"per_page": 30})
+    response.raise_for_status()
+    return [b["name"] for b in response.json()]
+
+
+def create_branch(repo_name, new_branch, from_branch, token=None, username=None):
+    """Create a new branch from an existing branch."""
+    username = username or _DEFAULT_USERNAME
+    ref_url = f"https://api.github.com/repos/{username}/{repo_name}/git/ref/heads/{from_branch}"
+    ref_resp = requests.get(ref_url, headers=_headers(token))
+    ref_resp.raise_for_status()
+    sha = ref_resp.json()["object"]["sha"]
+
+    url = f"https://api.github.com/repos/{username}/{repo_name}/git/refs"
+    response = requests.post(url, headers=_headers(token), json={
+        "ref": f"refs/heads/{new_branch}",
+        "sha": sha,
+    })
+    response.raise_for_status()
+    return new_branch
+
+
+def get_branch_commits(repo_name, head, base, token=None, username=None):
+    """Return up to 10 commit messages on head that are not in base."""
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/compare/{base}...{head}"
+    response = requests.get(url, headers=_headers(token))
+    response.raise_for_status()
+    commits = [c["commit"]["message"].split("\n")[0] for c in response.json().get("commits", [])]
+    return commits[:10]
+
+
+def create_pull_request(repo_name, title, body, head, base, token=None, username=None):
+    """Open a pull request."""
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/pulls"
+    response = requests.post(url, headers=_headers(token), json={
+        "title": title,
+        "body": body,
+        "head": head,
+        "base": base,
+    })
+    response.raise_for_status()
+    data = response.json()
+    return {"number": data["number"], "url": data["html_url"]}
+
+
 def get_open_issues(repo_name, token=None, username=None):
     """Fetch all open issues for a repo (excludes pull requests)."""
     username = username or _DEFAULT_USERNAME
