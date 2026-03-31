@@ -37,12 +37,12 @@ It works across **three interfaces**:
 - 🌐 **Web Chat UI** — Full chat interface at `/chat`, no WhatsApp or Twilio required
 - 🧩 **Chrome Extension** — Install as a browser extension, works with any user's GitHub account
 - ☁️ **Cloud Deployed** — Hosted on Railway, accessible to any user anywhere
+- 🌿 **Branch Management** — List branches and create new branches from chat
+- 📝 **PR Creation** — Open pull requests with AI-generated descriptions
 
 ### 🚀 Upcoming Features (Roadmap)
 - 🔧 **AI Auto-Fix Commits** — Describe the bug, AI writes the fix and commits it automatically
 - 🐛 **AI Issue Resolver** — Apply a suggested fix directly to the codebase
-- 🌿 **Branch Management** — Create, switch, and merge branches from chat
-- 📝 **PR Creation** — Open pull requests with AI-generated descriptions
 - 📊 **Commit Streak Tracking** — Track daily commit streaks like a coding fitness app
 - 🔔 **Smart Notifications** — Get alerted when PRs are reviewed, issues opened, or CI/CD fails
 - 📈 **Weekly Summary Reports** — Weekly digest of GitHub activity every Sunday
@@ -57,8 +57,8 @@ It works across **three interfaces**:
 commitiq/
 ├── app.py                  # Flask server — state machine, all routes
 ├── scheduler.py            # APScheduler — daily 10 AM WhatsApp reminder
-├── github_helper.py        # GitHub REST API: repos, issues, files, commits
-├── ai_helper.py            # AWS Bedrock (Claude 3 Haiku) — issue analysis
+├── github_helper.py        # GitHub REST API: repos, issues, files, commits, branches, PRs
+├── ai_helper.py            # Groq (Llama 3.3 70B) — issue analysis & PR descriptions
 ├── sessions.py             # In-memory session/state management per user
 ├── templates/
 │   └── chat.html           # Web chat UI (served at /chat)
