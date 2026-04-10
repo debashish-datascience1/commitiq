@@ -39,10 +39,10 @@ It works across **three interfaces**:
 - ☁️ **Cloud Deployed** — Hosted on Railway, accessible to any user anywhere
 - 🌿 **Branch Management** — List branches and create new branches from chat
 - 📝 **PR Creation** — Open pull requests with AI-generated descriptions
+- 🔧 **AI Auto-Fix Commits** — Describe the change in plain English, AI rewrites the file and commits it
 
 ### 🚀 Upcoming Features (Roadmap)
-- 🔧 **AI Auto-Fix Commits** — Describe the bug, AI writes the fix and commits it automatically
-- 🐛 **AI Issue Resolver** — Apply a suggested fix directly to the codebase
+- 🐛 **AI Issue Resolver** — Pick an issue, AI identifies the file and applies the fix
 - 📊 **Commit Streak Tracking** — Track daily commit streaks like a coding fitness app
 - 🔔 **Smart Notifications** — Get alerted when PRs are reviewed, issues opened, or CI/CD fails
 - 📈 **Weekly Summary Reports** — Weekly digest of GitHub activity every Sunday
