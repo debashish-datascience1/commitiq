@@ -9,6 +9,35 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID     = "llama-3.3-70b-versatile"
 
 
+def ai_fix_code(filename: str, content: str, description: str) -> str:
+    """Rewrite a file applying the described change. Returns only the new file content."""
+    prompt = (
+        "You are a software engineering assistant. "
+        "A developer wants to modify a file. "
+        "Apply the requested change and return ONLY the complete new file content. "
+        "Do NOT include any explanation, markdown, or code fences — just the raw file text.\n\n"
+        f"Filename: {filename}\n\n"
+        f"Current content:\n{content}\n\n"
+        f"Requested change: {description}"
+    )
+
+    response = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL_ID,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 4096,
+            "temperature": 0.2,
+        },
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+
 def generate_pr_description(repo_name: str, head: str, base: str, commits: list) -> str:
     """Generate a PR description from branch info and commit messages using Groq."""
     commits_text = "\n".join(f"- {c}" for c in commits) if commits else "- (no commits listed)"

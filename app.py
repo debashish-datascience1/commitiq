@@ -9,7 +9,7 @@ from github_helper import (
     create_issue, get_repo_contents, get_file_content, commit_file_change,
     get_branches, create_branch, get_branch_commits, create_pull_request,
 )
-from ai_helper import analyze_issue, generate_pr_description
+from ai_helper import analyze_issue, generate_pr_description, ai_fix_code
 from sessions import get_session, set_session, clear_session
 from scheduler import start_scheduler
 
@@ -314,9 +314,10 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                     set_session(user_id, state="awaiting_file_action", selected_file=selected_item["path"])
                     reply(
                         f"📄 *{selected_item['name']}*\n\n"
-                        "What do you want to add?\n\n"
-                        "1️⃣ *1* — Add a blank line (whitespace)\n"
+                        "What do you want to do?\n\n"
+                        "1️⃣ *1* — Add a blank line\n"
                         "2️⃣ *2* — Add a comment\n"
+                        "3️⃣ *3* — AI Auto-Fix (describe your change)\n"
                         "0️⃣ *0* — Go back",
                     )
             else:
@@ -349,8 +350,19 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             set_session(user_id, state="awaiting_comment_text", file_action="comment")
             reply("💬 What should the comment say?\n\nSend the comment text (without the comment prefix):")
 
+        elif cmd == "3":
+            set_session(user_id, state="awaiting_ai_fix_description")
+            reply(
+                "🤖 *AI Auto-Fix*\n\n"
+                "Describe the change you want to make to this file:\n\n"
+                "_Examples:_\n"
+                "• `add error handling to the login function`\n"
+                "• `rename variable x to user_count`\n"
+                "• `add a docstring to each function`",
+            )
+
         else:
-            reply("⚠️ Reply *1* to add a blank line, *2* to add a comment, or *0* to go back.")
+            reply("⚠️ Reply *1* to add a blank line, *2* to add a comment, *3* for AI Auto-Fix, or *0* to go back.")
 
     # ── STATE: awaiting comment text ──────────────────────────────────────────
     elif session["state"] == "awaiting_comment_text":
@@ -389,6 +401,69 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             print(f"Commit error: {e}")
             reply("❌ Commit failed. Please try again.\n\nReply *1* for issues or *2* to try committing again.")
             set_session(user_id, state="awaiting_repo_action")
+
+    # ── STATE: awaiting AI fix description ───────────────────────────────────
+    elif session["state"] == "awaiting_ai_fix_description":
+        selected_repo = session.get("selected_repo")
+        selected_file = session.get("selected_file")
+        filename = selected_file.split("/")[-1]
+
+        reply("⏳ AI is analyzing and applying your fix...")
+
+        try:
+            file_data = get_file_content(selected_repo, selected_file, **gh)
+            original = file_data["content"]
+            sha = file_data["sha"]
+
+            # Limit to ~8000 chars to stay within token budget
+            if len(original) > 8000:
+                reply("⚠️ File is too large for AI Auto-Fix (limit: ~8000 characters).\n\nReply *0* to go back.")
+                set_session(user_id, state="awaiting_file_action")
+            else:
+                new_content = ai_fix_code(filename, original, raw)
+                set_session(user_id, state="awaiting_ai_fix_commit", ai_fixed_content=new_content, file_sha=sha)
+                line_count = len(new_content.splitlines())
+                reply(
+                    f"✅ *AI Fix Ready!*\n\n"
+                    f"📄 `{selected_file}` — {line_count} lines\n\n"
+                    "Send your *commit message* to apply the fix, or reply *0* to cancel.",
+                )
+        except Exception as e:
+            print(f"AI fix error: {e}")
+            reply("❌ AI could not generate a fix. Try a clearer description and try again.\n\nReply *0* to go back.")
+            set_session(user_id, state="awaiting_file_action")
+
+    # ── STATE: awaiting AI fix commit message ─────────────────────────────────
+    elif session["state"] == "awaiting_ai_fix_commit":
+        selected_repo = session.get("selected_repo")
+        selected_file = session.get("selected_file")
+        new_content = session.get("ai_fixed_content", "")
+        sha = session.get("file_sha", "")
+
+        if cmd == "0":
+            set_session(user_id, state="awaiting_file_action")
+            reply(
+                "❌ AI fix cancelled.\n\n"
+                "1️⃣ *1* — Add a blank line\n"
+                "2️⃣ *2* — Add a comment\n"
+                "3️⃣ *3* — AI Auto-Fix\n"
+                "0️⃣ *0* — Go back",
+            )
+        else:
+            try:
+                commit_url = commit_file_change(selected_repo, selected_file, new_content, sha, raw, **gh)
+                set_session(user_id, state="awaiting_repo_action")
+                reply(
+                    f"🚀 *AI Fix Committed!*\n\n"
+                    f"📄 File: `{selected_file}`\n"
+                    f"💬 Message: _{raw}_\n"
+                    f"🔗 {commit_url}\n\n"
+                    "Reply *1* to view issues, *2* to commit another file, or *0* to go back.",
+                )
+            except Exception as e:
+                print(f"AI fix commit error: {e}")
+                reply("❌ Commit failed. Please try again.\n\nReply *0* to go back.")
+                set_session(user_id, state="awaiting_repo_action")
 
     # ── STATE: branch action menu ─────────────────────────────────────────────
     elif session["state"] == "awaiting_branch_action":
