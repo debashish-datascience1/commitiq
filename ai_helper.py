@@ -9,6 +9,49 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID     = "llama-3.3-70b-versatile"
 
 
+def identify_fix_file(issue_title: str, issue_body: str, file_paths: list) -> str:
+    """Ask AI which file most likely needs to be changed to fix this issue.
+    Returns the file path string (validated against file_paths)."""
+    files_text = "\n".join(f"- {p}" for p in file_paths)
+    issue_text = issue_body.strip() if issue_body else "No description provided."
+
+    prompt = (
+        "You are a software engineering assistant. "
+        "Given a GitHub issue and a list of repository files, identify the SINGLE file most likely "
+        "to contain the bug or need modification to fix the issue. "
+        "Reply with ONLY the exact file path from the list, nothing else.\n\n"
+        f"Issue Title: {issue_title}\n\n"
+        f"Issue Description:\n{issue_text}\n\n"
+        f"Repository files:\n{files_text}"
+    )
+
+    response = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL_ID,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 60,
+            "temperature": 0.1,
+        },
+    )
+    response.raise_for_status()
+    candidate = response.json()["choices"][0]["message"]["content"].strip().lstrip("- ").strip()
+
+    # Exact match
+    if candidate in file_paths:
+        return candidate
+    # Partial match (e.g. AI returned filename without path)
+    for fp in file_paths:
+        if fp.endswith(candidate) or candidate in fp:
+            return fp
+    # Fallback: first file
+    return file_paths[0] if file_paths else ""
+
+
 def ai_fix_code(filename: str, content: str, description: str) -> str:
     """Rewrite a file applying the described change. Returns only the new file content."""
     prompt = (

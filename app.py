@@ -9,7 +9,7 @@ from github_helper import (
     create_issue, get_repo_contents, get_file_content, commit_file_change,
     get_branches, create_branch, get_branch_commits, create_pull_request,
 )
-from ai_helper import analyze_issue, generate_pr_description, ai_fix_code
+from ai_helper import analyze_issue, generate_pr_description, ai_fix_code, identify_fix_file
 from sessions import get_session, set_session, clear_session
 from scheduler import start_scheduler
 
@@ -144,6 +144,71 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             set_session(user_id, state="awaiting_new_issue_title")
             reply("📝 *Create a New Issue*\n\nPlease send the *title* of the issue.")
 
+        elif cmd == "a":
+            selected_issue = session.get("selected_issue")
+            if not selected_issue:
+                reply("⚠️ Please select an issue number first, then reply *A* to apply a fix.")
+            else:
+                selected_repo = session.get("selected_repo")
+                reply("⏳ AI is scanning your repo and generating a fix — this may take a moment...")
+
+                try:
+                    # Collect files: root + one level of subdirectories
+                    root_items = get_repo_contents(selected_repo, "", **gh)
+                    file_paths = []
+                    for item in root_items:
+                        if item["type"] == "file":
+                            file_paths.append(item["path"])
+                        elif item["type"] == "dir":
+                            try:
+                                sub = get_repo_contents(selected_repo, item["path"], **gh)
+                                file_paths.extend(i["path"] for i in sub if i["type"] == "file")
+                            except Exception:
+                                pass
+
+                    if not file_paths:
+                        reply("⚠️ No files found in this repository.")
+                    else:
+                        target_file = identify_fix_file(
+                            selected_issue["title"], selected_issue["body"], file_paths
+                        )
+                        file_data = get_file_content(selected_repo, target_file, **gh)
+                        original = file_data["content"]
+                        sha = file_data["sha"]
+                        filename = target_file.split("/")[-1]
+
+                        if len(original) > 8000:
+                            reply(
+                                f"⚠️ Target file `{target_file}` is too large for AI fix.\n\n"
+                                "Reply with another issue number or *0* to go back."
+                            )
+                        else:
+                            fix_desc = (
+                                f"Fix this issue: {selected_issue['title']}\n\n"
+                                f"Issue details: {selected_issue['body']}"
+                            )
+                            new_content = ai_fix_code(filename, original, fix_desc)
+                            set_session(
+                                user_id,
+                                state="awaiting_issue_fix_commit",
+                                ai_fixed_content=new_content,
+                                file_sha=sha,
+                                selected_file=target_file,
+                            )
+                            reply(
+                                f"✅ *AI Fix Ready!*\n\n"
+                                f"📌 Issue: _{selected_issue['title']}_\n"
+                                f"📄 File: `{target_file}`\n\n"
+                                "Send your *commit message* to apply the fix, or reply *0* to cancel.",
+                            )
+
+                except Exception as e:
+                    print(f"Issue fix error: {e}")
+                    reply(
+                        "❌ Could not generate a fix automatically.\n\n"
+                        "Reply with another issue number or *0* to go back.",
+                    )
+
         elif cmd.isdigit():
             choice = int(cmd)
             if 1 <= choice <= len(issues):
@@ -160,9 +225,12 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                 try:
                     details = get_issue_details(selected_repo, issue["number"], **gh)
                     suggestion = analyze_issue(details["title"], details["body"])
+                    set_session(user_id, selected_issue=details)
                     reply(
                         f"🤖 *AI Analysis:*\n\n{suggestion}\n\n"
-                        "Reply with another issue number or *0* to go back.",
+                        "Reply *A* to auto-apply this fix\n"
+                        "Reply with another issue number to view\n"
+                        "Or reply *0* to go back.",
                     )
                 except Exception as e:
                     print(f"AI analysis error: {e}")
@@ -173,7 +241,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             else:
                 reply(f"⚠️ Please enter a number between 1 and {len(issues)}, or *0* to go back.")
         else:
-            reply("⚠️ Reply with the issue *number*, *N* to create a new issue, or *0* to go back.")
+            reply("⚠️ Reply with the issue *number*, *A* to apply a fix, *N* to create, or *0* to go back.")
 
     # ── STATE: awaiting new issue title ──────────────────────────────────────
     elif session["state"] == "awaiting_new_issue_title":
@@ -401,6 +469,37 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             print(f"Commit error: {e}")
             reply("❌ Commit failed. Please try again.\n\nReply *1* for issues or *2* to try committing again.")
             set_session(user_id, state="awaiting_repo_action")
+
+    # ── STATE: awaiting issue fix commit message ──────────────────────────────
+    elif session["state"] == "awaiting_issue_fix_commit":
+        selected_repo = session.get("selected_repo")
+        selected_file = session.get("selected_file")
+        new_content = session.get("ai_fixed_content", "")
+        sha = session.get("file_sha", "")
+
+        if cmd == "0":
+            issues = session.get("issues", [])
+            set_session(user_id, state="awaiting_issue_choice")
+            issue_list = "\n".join(f"{i + 1}. #{iss['number']} — {iss['title']}" for i, iss in enumerate(issues))
+            reply(
+                f"❌ Fix cancelled.\n\n🐛 *Open Issues:*\n\n{issue_list}\n\n"
+                "Reply with the *number* to view, *N* to create, or *0* to go back.",
+            )
+        else:
+            try:
+                commit_url = commit_file_change(selected_repo, selected_file, new_content, sha, raw, **gh)
+                set_session(user_id, state="awaiting_repo_action")
+                reply(
+                    f"🚀 *Issue Fix Committed!*\n\n"
+                    f"📄 File: `{selected_file}`\n"
+                    f"💬 Message: _{raw}_\n"
+                    f"🔗 {commit_url}\n\n"
+                    "Reply *1* to view issues, *2* to browse files, or *0* to go back.",
+                )
+            except Exception as e:
+                print(f"Issue fix commit error: {e}")
+                reply("❌ Commit failed. Please try again.\n\nReply *0* to go back.")
+                set_session(user_id, state="awaiting_repo_action")
 
     # ── STATE: awaiting AI fix description ───────────────────────────────────
     elif session["state"] == "awaiting_ai_fix_description":
