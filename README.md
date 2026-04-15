@@ -40,9 +40,9 @@ It works across **three interfaces**:
 - 🌿 **Branch Management** — List branches and create new branches from chat
 - 📝 **PR Creation** — Open pull requests with AI-generated descriptions
 - 🔧 **AI Auto-Fix Commits** — Describe the change in plain English, AI rewrites the file and commits it
+- 🐛 **AI Issue Resolver** — View any issue, reply A to auto-apply the fix: AI scans the repo, finds the right file, rewrites it, and commits
 
 ### 🚀 Upcoming Features (Roadmap)
-- 🐛 **AI Issue Resolver** — Pick an issue, AI identifies the file and applies the fix
 - 📊 **Commit Streak Tracking** — Track daily commit streaks like a coding fitness app
 - 🔔 **Smart Notifications** — Get alerted when PRs are reviewed, issues opened, or CI/CD fails
 - 📈 **Weekly Summary Reports** — Weekly digest of GitHub activity every Sunday
