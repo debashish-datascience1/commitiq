@@ -41,13 +41,13 @@ It works across **three interfaces**:
 - 📝 **PR Creation** — Open pull requests with AI-generated descriptions
 - 🔧 **AI Auto-Fix Commits** — Describe the change in plain English, AI rewrites the file and commits it
 - 🐛 **AI Issue Resolver** — View any issue, reply A to auto-apply the fix: AI scans the repo, finds the right file, rewrites it, and commits
+- 📱 **Mobile Web App (PWA)** — The `/chat` web UI is installable on Android/iOS home screen like a native app
+- 📈 **Weekly Summary Reports** — AI-generated digest of the week's GitHub activity sent every Sunday at 9 AM
 
 ### 🚀 Upcoming Features (Roadmap)
 - 📊 **Commit Streak Tracking** — Track daily commit streaks like a coding fitness app
 - 🔔 **Smart Notifications** — Get alerted when PRs are reviewed, issues opened, or CI/CD fails
-- 📈 **Weekly Summary Reports** — Weekly digest of GitHub activity every Sunday
 - 🔴 **Persistent Sessions** — Redis-backed sessions so state survives server restarts
-- 📱 **Mobile Web App (PWA)** — Installable on Android/iOS home screen
 
 ---
 

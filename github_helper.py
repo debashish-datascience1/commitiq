@@ -162,6 +162,41 @@ def create_pull_request(repo_name, title, body, head, base, token=None, username
     return {"number": data["number"], "url": data["html_url"]}
 
 
+def get_weekly_activity(token=None, username=None):
+    """Fetch user's public events from the past 7 days and return a summary dict."""
+    from datetime import datetime, timedelta, timezone
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/users/{username}/events"
+    response = requests.get(url, headers=_headers(token), params={"per_page": 100})
+    response.raise_for_status()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    pushes = issues_opened = prs_opened = commits = 0
+    repos = set()
+
+    for event in response.json():
+        created = datetime.fromisoformat(event["created_at"].replace("Z", "+00:00"))
+        if created < cutoff:
+            break
+        repo = event["repo"]["name"].split("/")[-1]
+        repos.add(repo)
+        if event["type"] == "PushEvent":
+            pushes += 1
+            commits += event["payload"].get("size", 0)
+        elif event["type"] == "IssuesEvent" and event["payload"].get("action") == "opened":
+            issues_opened += 1
+        elif event["type"] == "PullRequestEvent" and event["payload"].get("action") == "opened":
+            prs_opened += 1
+
+    return {
+        "repos": sorted(repos),
+        "pushes": pushes,
+        "commits": commits,
+        "issues_opened": issues_opened,
+        "prs_opened": prs_opened,
+    }
+
+
 def get_open_issues(repo_name, token=None, username=None):
     """Fetch all open issues for a repo (excludes pull requests)."""
     username = username or _DEFAULT_USERNAME

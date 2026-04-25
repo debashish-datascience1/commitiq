@@ -9,6 +9,42 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_ID     = "llama-3.3-70b-versatile"
 
 
+def generate_weekly_summary(activity: dict) -> str:
+    """Generate a friendly weekly GitHub activity digest using Groq."""
+    repos_text = ", ".join(activity["repos"]) if activity["repos"] else "none"
+    data_text = (
+        f"Repositories active: {repos_text}\n"
+        f"Push events: {activity['pushes']}\n"
+        f"Commits pushed: {activity['commits']}\n"
+        f"Issues opened: {activity['issues_opened']}\n"
+        f"Pull requests opened: {activity['prs_opened']}"
+    )
+
+    prompt = (
+        "You are a friendly developer productivity assistant. "
+        "Write a short, motivating weekly GitHub activity summary in 4-6 sentences. "
+        "Highlight achievements, mention active repos, and encourage continued progress. "
+        "Keep it conversational and upbeat.\n\n"
+        f"This week's activity:\n{data_text}"
+    )
+
+    response = requests.post(
+        GROQ_API_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL_ID,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 250,
+            "temperature": 0.6,
+        },
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+
 def identify_fix_file(issue_title: str, issue_body: str, file_paths: list) -> str:
     """Ask AI which file most likely needs to be changed to fix this issue.
     Returns the file path string (validated against file_paths)."""

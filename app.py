@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from twilio.rest import Client
 from dotenv import load_dotenv
@@ -744,6 +744,11 @@ def chat():
     return render_template("chat.html")
 
 
+@app.route("/sw.js")
+def service_worker():
+    return send_from_directory("static", "sw.js", mimetype="application/javascript")
+
+
 @app.route("/api/message", methods=["POST"])
 def api_message():
     data = request.get_json()
@@ -764,6 +769,13 @@ def test_reminder():
     from scheduler import send_daily_reminder
     send_daily_reminder()
     return "Reminder sent!", 200
+
+
+@app.route("/test-weekly")
+def test_weekly():
+    from scheduler import send_weekly_summary
+    send_weekly_summary()
+    return "Weekly summary sent!", 200
 
 
 if __name__ == "__main__":
