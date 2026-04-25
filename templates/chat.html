@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CommitIQ</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <meta name="theme-color" content="#238636" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CommitIQ" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -328,16 +334,22 @@
 
   // Quick-reply chip definitions per state keyword found in bot messages
   const CHIP_MAP = [
-    { match: "1* — Yes",              chips: ["1 — Yes, let's work!", "2 — No, not today"] },
-    { match: "number* of the repo",   chips: [] },   // dynamic — repo numbers shown
-    { match: "1* — View & manage",    chips: ["1 — View issues", "2 — Make a commit", "0 — Back"] },
-    { match: "issue *number*",        chips: ["N — New issue", "0 — Back"] },
-    { match: "Create a New Issue",    chips: [] },
-    { match: "description* of the",  chips: ["skip"] },
-    { match: "1* — Add a blank line", chips: ["1 — Blank line", "2 — Add comment", "0 — Back"] },
-    { match: "comment* say",          chips: [] },
-    { match: "commit *message",       chips: [] },
-    { match: "1* to view issues",     chips: ["1 — View issues", "2 — Make a commit", "0 — Back to repos"] },
+    { match: "1 — Yes, let's work",      chips: ["1 — Yes, let's work!", "2 — No, not today"] },
+    { match: "number of the repo",        chips: [] },
+    { match: "1 — View & manage issues",  chips: ["1 — Issues", "2 — Browse files", "3 — Branches", "4 — Create PR", "0 — Back"] },
+    { match: "issue number",              chips: ["A — Apply AI fix", "N — New issue", "0 — Back"] },
+    { match: "AI analysis",              chips: ["A — Apply AI fix", "0 — Back"] },
+    { match: "Create a New Issue",        chips: [] },
+    { match: "description of the issue",  chips: ["skip"] },
+    { match: "1 — Add a blank line",      chips: ["1 — Blank line", "2 — Comment", "3 — AI Auto-Fix", "0 — Back"] },
+    { match: "AI Auto-Fix",               chips: [] },
+    { match: "commit message",            chips: [] },
+    { match: "AI Fix Ready",              chips: ["0 — Cancel"] },
+    { match: "1 to list branches",        chips: ["1 — List branches", "2 — New branch", "0 — Back"] },
+    { match: "Select the head branch",    chips: [] },
+    { match: "Select the base branch",    chips: [] },
+    { match: "PR title",                  chips: [] },
+    { match: "1 to view issues",          chips: ["1 — Issues", "2 — Browse files", "3 — Branches", "4 — Create PR", "0 — Back"] },
   ];
 
   function setChips(botText) {
@@ -477,6 +489,11 @@
 
   // Greet the user on load
   window.addEventListener("load", () => sendMessage("hi"));
+
+  // Register service worker for PWA installability
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 </script>
 </body>
 </html>
