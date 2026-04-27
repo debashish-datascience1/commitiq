@@ -197,6 +197,33 @@ def get_weekly_activity(token=None, username=None):
     }
 
 
+def close_issue(repo_name, issue_number, token=None, username=None):
+    """Close an issue by number."""
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/issues/{issue_number}"
+    response = requests.patch(url, headers=_headers(token), json={"state": "closed"})
+    response.raise_for_status()
+    return response.json()["html_url"]
+
+
+def get_open_prs(repo_name, token=None, username=None):
+    """List all open pull requests for a repo."""
+    username = username or _DEFAULT_USERNAME
+    url = f"https://api.github.com/repos/{username}/{repo_name}/pulls"
+    response = requests.get(url, headers=_headers(token), params={"state": "open", "per_page": 20})
+    response.raise_for_status()
+    return [
+        {
+            "number": pr["number"],
+            "title": pr["title"],
+            "head": pr["head"]["ref"],
+            "base": pr["base"]["ref"],
+            "url": pr["html_url"],
+        }
+        for pr in response.json()
+    ]
+
+
 def get_open_issues(repo_name, token=None, username=None):
     """Fetch all open issues for a repo (excludes pull requests)."""
     username = username or _DEFAULT_USERNAME

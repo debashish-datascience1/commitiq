@@ -8,6 +8,7 @@ from github_helper import (
     get_user_repos, get_open_issues, get_issue_details,
     create_issue, get_repo_contents, get_file_content, commit_file_change,
     get_branches, create_branch, get_branch_commits, create_pull_request,
+    close_issue, get_open_prs,
 )
 from ai_helper import analyze_issue, generate_pr_description, ai_fix_code, identify_fix_file
 from sessions import get_session, set_session, clear_session
@@ -120,6 +121,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                     "2️⃣ *2* — Browse files & commit\n"
                     "3️⃣ *3* — Manage branches\n"
                     "4️⃣ *4* — Create a pull request\n"
+                    "5️⃣ *5* — View open pull requests\n"
                     "0️⃣ *0* — Back to repo list",
                 )
             else:
@@ -143,6 +145,29 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
         elif cmd == "n":
             set_session(user_id, state="awaiting_new_issue_title")
             reply("📝 *Create a New Issue*\n\nPlease send the *title* of the issue.")
+
+        elif cmd == "c":
+            selected_issue = session.get("selected_issue")
+            if not selected_issue:
+                reply("⚠️ Please select an issue number first, then reply *C* to close it.")
+            else:
+                selected_repo = session.get("selected_repo")
+                try:
+                    url = close_issue(selected_repo, selected_issue["number"], **gh)
+                    issues = get_open_issues(selected_repo, **gh)
+                    set_session(user_id, state="awaiting_issue_choice", issues=issues, selected_issue=None)
+                    if issues:
+                        issue_list = "\n".join(f"{i + 1}. #{iss['number']} — {iss['title']}" for i, iss in enumerate(issues))
+                        reply(
+                            f"✅ *Issue #{selected_issue['number']} closed!*\n\n"
+                            f"🐛 *Remaining open issues in {selected_repo}:*\n\n{issue_list}\n\n"
+                            "Reply with the *number* to view, *N* to create, or *0* to go back.",
+                        )
+                    else:
+                        reply(f"✅ *Issue #{selected_issue['number']} closed!*\n\n🎉 No more open issues in *{selected_repo}*!\n\nReply *N* to create one or *0* to go back.")
+                except Exception as e:
+                    print(f"Close issue error: {e}")
+                    reply("❌ Could not close the issue. Please try again.")
 
         elif cmd == "a":
             selected_issue = session.get("selected_issue")
@@ -229,6 +254,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                     reply(
                         f"🤖 *AI Analysis:*\n\n{suggestion}\n\n"
                         "Reply *A* to auto-apply this fix\n"
+                        "Reply *C* to close this issue\n"
                         "Reply with another issue number to view\n"
                         "Or reply *0* to go back.",
                     )
@@ -241,7 +267,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
             else:
                 reply(f"⚠️ Please enter a number between 1 and {len(issues)}, or *0* to go back.")
         else:
-            reply("⚠️ Reply with the issue *number*, *A* to apply a fix, *N* to create, or *0* to go back.")
+            reply("⚠️ Reply with the issue *number*, *A* to apply fix, *C* to close, *N* to create, or *0* to go back.")
 
     # ── STATE: awaiting new issue title ──────────────────────────────────────
     elif session["state"] == "awaiting_new_issue_title":
@@ -340,8 +366,23 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                 print(f"Branch fetch error: {e}")
                 reply("❌ Could not fetch branches. Please try again.")
 
+        elif cmd == "5":
+            try:
+                prs = get_open_prs(selected_repo, **gh)
+                if not prs:
+                    reply(f"✅ *{selected_repo}* has no open pull requests.\n\nReply *4* to create one or *0* to go back.")
+                else:
+                    pr_list = "\n".join(
+                        f"{i + 1}. *#{pr['number']}* — {pr['title']}\n   🌿 `{pr['head']}` → `{pr['base']}`\n   🔗 {pr['url']}"
+                        for i, pr in enumerate(prs)
+                    )
+                    reply(f"🔀 *Open Pull Requests in {selected_repo}:*\n\n{pr_list}\n\nReply *4* to create a PR or *0* to go back.")
+            except Exception as e:
+                print(f"PR list error: {e}")
+                reply("❌ Could not fetch pull requests. Please try again.")
+
         else:
-            reply("⚠️ Reply *1* for issues, *2* to browse files, *3* for branches, *4* to create a PR, or *0* to go back.")
+            reply("⚠️ Reply *1* for issues, *2* to browse files, *3* for branches, *4* to create a PR, *5* to view PRs, or *0* to go back.")
 
     # ── STATE: browsing files ─────────────────────────────────────────────────
     elif session["state"] == "browsing_files":
@@ -352,7 +393,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
         if cmd == "0":
             if current_path == "":
                 set_session(user_id, state="awaiting_repo_action")
-                reply(f"📂 *{selected_repo}*\n\nWhat would you like to do?\n\n1️⃣ *1* — View & manage issues\n2️⃣ *2* — Browse files & commit\n3️⃣ *3* — Manage branches\n4️⃣ *4* — Create a pull request\n0️⃣ *0* — Back to repo list")
+                reply(f"📂 *{selected_repo}*\n\nWhat would you like to do?\n\n1️⃣ *1* — View & manage issues\n2️⃣ *2* — Browse files & commit\n3️⃣ *3* — Manage branches\n4️⃣ *4* — Create a pull request\n5️⃣ *5* — View open pull requests\n0️⃣ *0* — Back to repo list")
             else:
                 parent = "/".join(current_path.split("/")[:-1])
                 try:
@@ -380,8 +421,16 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                         reply("❌ Could not open folder. Please try again.")
                 else:
                     set_session(user_id, state="awaiting_file_action", selected_file=selected_item["path"])
+                    # Show file preview (first 25 lines)
+                    try:
+                        file_data = get_file_content(selected_repo, selected_item["path"], **gh)
+                        lines = file_data["content"].splitlines()
+                        preview = "\n".join(lines[:25])
+                        truncated = f"\n_...{len(lines) - 25} more lines_" if len(lines) > 25 else ""
+                        reply(f"📄 *{selected_item['name']}* ({len(lines)} lines)\n\n`{preview}`{truncated}")
+                    except Exception:
+                        pass
                     reply(
-                        f"📄 *{selected_item['name']}*\n\n"
                         "What do you want to do?\n\n"
                         "1️⃣ *1* — Add a blank line\n"
                         "2️⃣ *2* — Add a comment\n"
@@ -578,6 +627,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                 "2️⃣ *2* — Browse files & commit\n"
                 "3️⃣ *3* — Manage branches\n"
                 "4️⃣ *4* — Create a pull request\n"
+                "5️⃣ *5* — View open pull requests\n"
                 "0️⃣ *0* — Back to repo list",
             )
 
@@ -632,6 +682,7 @@ def process_message(user_id: str, text: str, gh_token: str = None, gh_username: 
                 "2️⃣ *2* — Browse files & commit\n"
                 "3️⃣ *3* — Manage branches\n"
                 "4️⃣ *4* — Create a pull request\n"
+                "5️⃣ *5* — View open pull requests\n"
                 "0️⃣ *0* — Back to repo list",
             )
 
